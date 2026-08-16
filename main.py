@@ -1,11 +1,11 @@
 import os
 import sys
-import json
 import time
 import requests
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from google import genai  # 最新のGoogle GenAI SDKを使用
 
 # ==========================================
 # ⚙️ 設定情報（環境変数より取得）
@@ -17,36 +17,27 @@ if not WEBHOOK_URL or not GEMINI_API_KEY:
     print("❌ エラー: 環境変数 DISCORD_WEBHOOK_URL または GEMINI_API_KEY が設定されていません。")
     sys.exit(1)
 
+# Gemini クライアントの初期化
+client = genai.Client(api_key=GEMINI_API_KEY)
+
 # ==========================================
 # 📦 対象銘柄リスト
 # ==========================================
 TICKER_LIST = [
-    "7203.T", "7201.T", "7267.T", "7269.T", "6902.T", "7259.T", "7270.T", "5108.T", "7261.T", "6758.T",
-    "6501.T", "6503.T", "6752.T", "6645.T", "6762.T", "6506.T", "6861.T", "6981.T", "6954.T", "8035.T",
-    "6146.T", "6971.T", "6857.T", "7735.T", "6723.T", "6526.T", "6701.T", "6702.T", "6504.T", "6869.T",
-    "6920.T", "6178.T", "7751.T", "7741.T", "6473.T", "6471.T", "6301.T", "6326.T", "6367.T", "6141.T",
-    "7011.T", "7012.T", "7013.T", "7272.T", "6273.T", "6586.T", "9432.T", "9433.T", "9984.T", "9434.T",
-    "4689.T", "4755.T", "9613.T", "4307.T", "9735.T", "3659.T", "2413.T", "4385.T", "3923.T", "6098.T",
-    "8306.T", "8316.T", "8411.T", "8308.T", "8766.T", "8591.T", "8001.T", "8031.T", "8053.T", "8058.T",
-    "8002.T", "2768.T", "8015.T", "9843.T", "3038.T", "7532.T", "8267.T", "9983.T", "3382.T", "4502.T",
-    "4503.T", "4507.T", "4519.T", "4523.T", "4568.T", "4578.T", "4901.T", "4911.T", "4452.T", "5020.T",
-    "1605.T", "9501.T", "9502.T", "9503.T", "5401.T", "5411.T", "5713.T", "2502.T", "2503.T", "2914.T",
-    "1801.T", "1802.T", "1803.T", "1812.T", "1925.T", "1928.T", "8801.T", "8802.T", "8830.T", "9020.T",
-    "9022.T", "9201.T", "9202.T", "9101.T", "9104.T", "9107.T", "7974.T", "7832.T", "9766.T", "9962.T"
+    "7203.T", "6758.T", "6501.T", "6861.T", "8035.T", "6920.T", "9984.T", "8306.T",
+    "8058.T", "9983.T", "7974.T", "9101.T", "3382.T", "4502.T", "9432.T"
 ]
 
 COMPANY_NAMES = {
     "7203.T": "トヨタ自動車", "6758.T": "ソニーグループ", "6501.T": "日立製作所", "6861.T": "キーエンス",
     "8035.T": "東京エレクトロン", "6920.T": "レーザーテック", "9984.T": "ソフトバンクG", "8306.T": "三菱UFJ",
-    "8058.T": "三菱商事", "9983.T": "ファーストリテイリング", "7974.T": "任天堂", "9101.T": "日本郵船"
+    "8058.T": "三菱商事", "9983.T": "ファーストリテイリング", "7974.T": "任天堂", "9101.T": "日本郵船",
+    "3382.T": "セブン&アイHD", "4502.T": "武田薬品", "9432.T": "NTT"
 }
 
 def get_company_name(code):
     return COMPANY_NAMES.get(code, code.replace(".T", ""))
 
-# ==========================================
-# 📊 テクニカル指標計算ヘルパー
-# ==========================================
 def calculate_rsi(series, period=14):
     delta = series.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
@@ -58,7 +49,7 @@ def calculate_rsi(series, period=14):
 # 🔍 1次スクリーニング
 # ==========================================
 def run_screening():
-    print("📈 株価データを一括取得中...")
+    print("📈 株価データを取得中...")
     end_date = pd.Timestamp.now()
     start_date = end_date - pd.Timedelta(days=150)
     
@@ -90,18 +81,14 @@ def run_screening():
 
         detected_system = None
 
-        # 1. 新高値ブレイクアウト
-        if latest_price >= prices.iloc[-50:].max() and vol_ratio >= 1.3:
+        if latest_price >= prices.iloc[-50:].max() and vol_ratio >= 1.2:
             detected_system = "🚀 新高値ブレイクアウト"
-        # 2. パニック逆張り
-        elif rsi <= 32:
+        elif rsi <= 35:
             detected_system = "📉 大暴落パニック検知"
-        # 3. 押し目買い
-        elif latest_price > sma50 and latest_price <= sma20 and rsi < 50:
+        elif latest_price > sma50 and latest_price <= sma20 and rsi < 55:
             detected_system = "🛡️ 攻めの押し目買い"
 
         if detected_system:
-            # 簡略スコア算出 (ボラティリティ調整)
             volatility = prices.pct_change().std() * np.sqrt(252)
             candidates.append({
                 "code": code,
@@ -113,12 +100,10 @@ def run_screening():
     return pd.DataFrame(candidates)
 
 # ==========================================
-# 🧠 Gemini API による個別解説
+# 🧠 Gemini API による個別解説 (google-genai SDK使用)
 # ==========================================
 def fetch_gemini_analysis(code, name, system):
     clean_code = code.replace(".T", "")
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_API_KEY}"
-    headers = {'Content-Type': 'application/json'}
 
     prompt = f"""あなたはプロの証券アナリストです。
 以下の日本株銘柄について、テクニカル指標「以外」の観点から、株価が動いている背景をプロの視点で分析してください。
@@ -135,21 +120,28 @@ def fetch_gemini_analysis(code, name, system):
 ■ 今後の注目カタリスト（材料・決算期などのリスク）:
 """
 
-    payload = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }]
-    }
-
-    try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=30)
-        res_json = response.json()
-        if "candidates" in res_json and len(res_json["candidates"]) > 0:
-            return res_json["candidates"][0]["content"]["parts"][0]["text"]
-        else:
-            return "⚠️ Gemini APIからの回答生成に失敗しました。"
-    except Exception as e:
-        return f"⚠️ 通信エラーが発生しました: {e}"
+    # 429利用制限エラー対策で最大3回リトライ
+    for attempt in range(1, 4):
+        try:
+            # gemini-2.0-flash または gemini-1.5-flash を指定
+            response = client.models.generate_content(
+                model='gemini-2.0-flash-lite',
+                contents=prompt,
+            )
+            if response.text:
+                return response.text
+            else:
+                return "⚠️ AIからの回答テキストが空でした。"
+        except Exception as e:
+            err_str = str(e)
+            print(f"⚠️ Gemini API エラー (試行 {attempt}/3): {err_str}")
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                time.sleep(20 * attempt)
+            else:
+                time.sleep(5)
+            
+            if attempt == 3:
+                return f"⚠️ Gemini API呼び出し失敗 (詳細: {err_str[:150]})"
 
 # ==========================================
 # 🕊️ Discord Webhook 送信
@@ -184,7 +176,7 @@ def main():
         company_name = row["name"]
         detected_system = row["system"]
 
-        # API制限(RPM)を抑えるため12秒待機
+        # API制限(RPM)を回避するため12秒待機
         if rank > 1:
             time.sleep(12)
 
