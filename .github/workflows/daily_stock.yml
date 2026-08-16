@@ -1,0 +1,31 @@
+name: Daily Stock Screener & AI Analyst
+
+on:
+  schedule:
+    # UTCの 09:00 (日本時間 JST 18:00) / 月〜金曜日
+    - cron: '0 9 * * 1-5'
+  workflow_dispatch: # 手動実行用ボタンを有効化
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python環境のセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 依存ライブラリのインストール
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: スクリーニング・AI解析・Discord送信の実行
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python main.py
