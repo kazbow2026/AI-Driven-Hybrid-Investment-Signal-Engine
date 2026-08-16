@@ -1,4 +1,4 @@
-import os
+qimport os
 import sys
 import json
 import time
@@ -136,9 +136,9 @@ def fetch_gemini_analysis(code, name, system):
 
     for attempt in range(1, 4):
         try:
-            # ★ 最新モデル gemini-1.5-flash に修正
+            # ★ 最新モデル gemini-2.0-flash-Lie に修正
             response = client.models.generate_content(
-                model='gemini-1.5-flash',
+                model='gemini-2.0-flash=Lite',
                 contents=prompt,
             )
             if response.text:
