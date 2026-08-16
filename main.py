@@ -1,6 +1,6 @@
 import os
 import sys
-import json  # ★ Discord送信で必須のライブラリを追加
+import json
 import time
 import requests
 import numpy as np
@@ -22,7 +22,7 @@ if not WEBHOOK_URL or not GEMINI_API_KEY:
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 # テストモードの切り替え (True: テスト実行 / False: 通常運用)
-TEST_MODE = True
+TEST_MODE = False
 
 # ==========================================
 # 📦 対象銘柄リスト
@@ -136,9 +136,9 @@ def fetch_gemini_analysis(code, name, system):
 
     for attempt in range(1, 4):
         try:
-            # ★ 安定している gemini-2.5-flash（または gemini-1.5-flash）に変更
+            # gemini-2.0-flash に更新
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-2.0-flash',
                 contents=prompt,
             )
             if response.text:
