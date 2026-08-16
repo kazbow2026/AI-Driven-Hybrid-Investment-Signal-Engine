@@ -5,7 +5,7 @@ import requests
 import numpy as np
 import pandas as pd
 import yfinance as yf
-from google import genai  # 最新のGoogle GenAI SDKを使用
+from google import genai
 
 # ==========================================
 # ⚙️ 設定情報（環境変数より取得）
@@ -20,9 +20,8 @@ if not WEBHOOK_URL or not GEMINI_API_KEY:
 # Gemini クライアントの初期化
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# テストモードの切り替え (Trueにすると条件が大幅に緩和され、確実に通知テストができます。）
-　　　　　　　　　　　　　（False＝通常)
-TEST_MODE = False
+# テストモードの切り替え (True: テスト実行 / False: 通常運用)
+TEST_MODE = True
 
 # ==========================================
 # 📦 対象銘柄リスト
@@ -86,7 +85,7 @@ def run_screening():
         detected_system = None
 
         if TEST_MODE:
-            # === テストモード: 条件を緩和して動作確認用 ===
+            # テストモード判定
             if latest_price >= prices.iloc[-10:].max():
                 detected_system = "🚀 新高値ブレイクアウト(テスト)"
             elif rsi <= 55:
@@ -94,7 +93,7 @@ def run_screening():
             else:
                 detected_system = "📊 モメンタム判定(テスト)"
         else:
-            # === 本番用スクリーニング条件 ===
+            # 本番用スクリーニング判定
             if latest_price >= prices.iloc[-50:].max() and vol_ratio >= 1.2:
                 detected_system = "🚀 新高値ブレイクアウト"
             elif rsi <= 35:
@@ -173,7 +172,6 @@ def main():
     print("🤖 株式自動スクリーニング処理を開始します...")
     df_candidates = run_screening()
 
-    # ★ 該当銘柄が0件の場合のDiscord通知処理
     if df_candidates.empty:
         print("ℹ️ 本日基準を満たす銘柄はありませんでした。Discordに通知を送信します。")
         no_signal_msg = (
