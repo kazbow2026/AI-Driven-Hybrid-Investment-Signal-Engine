@@ -22,7 +22,7 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 
 # テストモードの切り替え (Trueにすると条件が大幅に緩和され、確実に通知テストができます。）
 　　　　　　　　　　　　　（False＝通常)
-TEST_MODE = True
+TEST_MODE = False
 
 # ==========================================
 # 📦 対象銘柄リスト
