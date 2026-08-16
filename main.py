@@ -136,9 +136,9 @@ def fetch_gemini_analysis(code, name, system):
 
     for attempt in range(1, 4):
         try:
-            # gemini-2.0-flash に更新
+            # ★ 最新モデル gemini-2.5-flash に修正
             response = client.models.generate_content(
-                model='gemini-2.0-flash',
+                model='gemini-2.5-flash',
                 contents=prompt,
             )
             if response.text:
