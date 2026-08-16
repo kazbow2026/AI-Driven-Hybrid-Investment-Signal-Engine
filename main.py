@@ -1,5 +1,6 @@
 import os
 import sys
+import json  # ★ Discord送信で必須のライブラリを追加
 import time
 import requests
 import numpy as np
@@ -113,7 +114,7 @@ def run_screening():
     return pd.DataFrame(candidates)
 
 # ==========================================
-# 🧠 Gemini API による個別解説 (google-genai SDK使用)
+# 🧠 Gemini API による個別解説
 # ==========================================
 def fetch_gemini_analysis(code, name, system):
     clean_code = code.replace(".T", "")
@@ -135,8 +136,9 @@ def fetch_gemini_analysis(code, name, system):
 
     for attempt in range(1, 4):
         try:
+            # ★ 安定している gemini-2.5-flash（または gemini-1.5-flash）に変更
             response = client.models.generate_content(
-                model='gemini-2.0-flash-lite',
+                model='gemini-2.5-flash',
                 contents=prompt,
             )
             if response.text:
