@@ -20,6 +20,10 @@ if not WEBHOOK_URL or not GEMINI_API_KEY:
 # Gemini クライアントの初期化
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+# テストモードの切り替え (Trueにすると条件が大幅に緩和され、確実に通知テストができます。）
+　　　　　　　　　　　　　（False＝通常)
+TEST_MODE = True
+
 # ==========================================
 # 📦 対象銘柄リスト
 # ==========================================
@@ -81,12 +85,22 @@ def run_screening():
 
         detected_system = None
 
-        if latest_price >= prices.iloc[-50:].max() and vol_ratio >= 1.2:
-            detected_system = "🚀 新高値ブレイクアウト"
-        elif rsi <= 35:
-            detected_system = "📉 大暴落パニック検知"
-        elif latest_price > sma50 and latest_price <= sma20 and rsi < 55:
-            detected_system = "🛡️ 攻めの押し目買い"
+        if TEST_MODE:
+            # === テストモード: 条件を緩和して動作確認用 ===
+            if latest_price >= prices.iloc[-10:].max():
+                detected_system = "🚀 新高値ブレイクアウト(テスト)"
+            elif rsi <= 55:
+                detected_system = "🛡️ 攻めの押し目買い(テスト)"
+            else:
+                detected_system = "📊 モメンタム判定(テスト)"
+        else:
+            # === 本番用スクリーニング条件 ===
+            if latest_price >= prices.iloc[-50:].max() and vol_ratio >= 1.2:
+                detected_system = "🚀 新高値ブレイクアウト"
+            elif rsi <= 35:
+                detected_system = "📉 大暴落パニック検知"
+            elif latest_price > sma50 and latest_price <= sma20 and rsi < 55:
+                detected_system = "🛡️ 攻めの押し目買い"
 
         if detected_system:
             volatility = prices.pct_change().std() * np.sqrt(252)
@@ -120,10 +134,8 @@ def fetch_gemini_analysis(code, name, system):
 ■ 今後の注目カタリスト（材料・決算期などのリスク）:
 """
 
-    # 429利用制限エラー対策で最大3回リトライ
     for attempt in range(1, 4):
         try:
-            # gemini-2.0-flash または gemini-1.5-flash を指定
             response = client.models.generate_content(
                 model='gemini-2.0-flash-lite',
                 contents=prompt,
@@ -161,9 +173,15 @@ def main():
     print("🤖 株式自動スクリーニング処理を開始します...")
     df_candidates = run_screening()
 
+    # ★ 該当銘柄が0件の場合のDiscord通知処理
     if df_candidates.empty:
-        print("ℹ️ 本日基準を満たす銘柄はありませんでした。")
-        send_discord_message("🧭 **【AIアナリスト】** 本日基準を満たす注目銘柄は検出されませんでした。")
+        print("ℹ️ 本日基準を満たす銘柄はありませんでした。Discordに通知を送信します。")
+        no_signal_msg = (
+            "🧭 **【AIアナリスト：日次パトロール報告】**\n\n"
+            "💤 本日、スクリーニング条件（新高値ブレイクアウト／大暴落パニック／攻めの押し目買い）を満たす注目銘柄は検出されませんでした。\n"
+            "市場の動きを見守り、じっくりチャンスを待ちましょう。"
+        )
+        send_discord_message(no_signal_msg)
         return
 
     df_ranked = df_candidates.sort_values(by="score", ascending=False)
@@ -176,7 +194,6 @@ def main():
         company_name = row["name"]
         detected_system = row["system"]
 
-        # API制限(RPM)を回避するため12秒待機
         if rank > 1:
             time.sleep(12)
 
