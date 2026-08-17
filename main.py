@@ -1,8 +1,10 @@
+import csv
+import datetime
 import os
+from google import genai
+import pandas as pd
 import requests
 import yfinance as yf
-import pandas as pd
-from google import genai
 
 # ==========================================
 # 1. 設定・環境変数・テストモードの初期化
@@ -15,6 +17,56 @@ TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
 
 # google-genai SDK クライアントの初期化
 client = genai.Client(api_key=GEMINI_API_KEY)
+
+
+# ==========================================
+# 📂 CSV自動保存関数
+# ==========================================
+def save_to_csv(results):
+    """分析結果を data/history.csv に自動追記する関数"""
+    os.makedirs("data", exist_ok=True)
+    filepath = os.path.join("data", "history.csv")
+
+    file_exists = os.path.exists(filepath)
+    today_str = datetime.date.today().strftime("%Y-%m-%d")
+
+    fieldnames = [
+        "date",
+        "rank",
+        "code",
+        "name",
+        "pattern",
+        "price",
+        "report",
+    ]
+
+    try:
+        with open(
+            filepath, mode="a", encoding="utf-8-sig", newline=""
+        ) as file:
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+
+            # 新規ファイルの場合はヘッダーを出力
+            if not file_exists:
+                writer.writeheader()
+
+            for item in results:
+                writer.writerow({
+                    "date": today_str,
+                    "rank": item.get("rank", ""),
+                    "code": item.get("code", ""),
+                    "name": item.get("name", ""),
+                    "pattern": item.get("pattern", ""),
+                    "price": item.get("price", ""),
+                    # CSV崩れを防ぐため改行をスペースに置換
+                    "report": item.get("report", "").replace("\n", " "),
+                })
+
+        print(f"📊 分析結果を {filepath} に正常に追記保存しました。")
+
+    except Exception as e:
+        print(f"⚠️ CSV保存エラー: {e}")
+
 
 # ==========================================
 # 2. 監視銘柄リスト（約200銘柄に拡充）
@@ -57,7 +109,7 @@ RAW_DATA = [
     "9021:JR西日本,9022:JR東海,9201:JAL,9202:ANA,9101:日本郵船,9104:商船三井",
     "9107:川崎汽船,9301:三菱倉庫,4614:トウペ,4681:リゾートトラスト,6055:Jマテリアル",
     "7911:凸版印刷,7912:大日本印刷,7951:ヤマハ,7974:任天堂,7832:バンナムHD",
-    "9766:コナミG,9962:ミスミG,9064:ヤマトHD,9143:SGホールディングス"
+    "9766:コナミG,9962:ミスミG,9064:ヤマトHD,9143:SGホールディングス",
 ]
 
 TARGET_STOCKS = {}
@@ -66,6 +118,7 @@ for line in RAW_DATA:
         if ":" in item:
             code, name = item.split(":")
             TARGET_STOCKS[f"{code}.T"] = name
+
 
 # ==========================================
 # 3. テクニカル分析・シグナル検出関数
@@ -76,19 +129,19 @@ def analyze_stock(ticker, name):
         if df.empty or len(df) < 50:
             return None
 
-        close = df['Close'].iloc[-1]
+        close = df["Close"].iloc[-1]
         if isinstance(close, pd.Series):
             close = close.item()
-            
-        high_20 = df['High'].iloc[-21:-1].max()
+
+        high_20 = df["High"].iloc[-21:-1].max()
         if isinstance(high_20, pd.Series):
             high_20 = high_20.item()
 
-        sma20 = df['Close'].rolling(window=20).mean().iloc[-1]
+        sma20 = df["Close"].rolling(window=20).mean().iloc[-1]
         if isinstance(sma20, pd.Series):
             sma20 = sma20.item()
 
-        sma50 = df['Close'].rolling(window=50).mean().iloc[-1]
+        sma50 = df["Close"].rolling(window=50).mean().iloc[-1]
         if isinstance(sma50, pd.Series):
             sma50 = sma50.item()
 
@@ -104,11 +157,12 @@ def analyze_stock(ticker, name):
                 "code": code,
                 "name": name,
                 "signal": signal,
-                "close": round(close, 1)
+                "close": round(close, 1),
             }
     except Exception as e:
         print(f"Error analyzing {ticker}: {e}")
     return None
+
 
 # ==========================================
 # 4. Gemini API によるレポート生成関数
@@ -138,6 +192,7 @@ def generate_report(stock_info):
     except Exception as e:
         return f"Gemini API呼び出し失敗 (詳細: {e})"
 
+
 # ==========================================
 # 5. Discord Webhook 送信関数
 # ==========================================
@@ -157,6 +212,7 @@ def send_discord_notification(rank, stock_info, report_text):
     except Exception as e:
         print(f"Failed to send Discord message: {e}")
 
+
 # ==========================================
 # 6. メイン実行処理
 # ==========================================
@@ -171,12 +227,14 @@ def main():
 
     # テストモード有効化時かつ検出0件の場合、検証用ダミーデータを注入
     if TEST_MODE and not detected_stocks:
-        print("【TEST MODE】シグナル不検出のため、テスト用ダミーデータを追加して検証を行います。")
+        print(
+            "【TEST MODE】シグナル不検出のため、テスト用ダミーデータを追加して検証を行います。"
+        )
         detected_stocks.append({
             "code": "7203",
             "name": "トヨタ自動車 (テスト)",
             "signal": "新高値ブレイクアウト",
-            "close": 2850.0
+            "close": 2850.0,
         })
 
     # シグナル検出が0件かつテストモードオフの場合
@@ -184,16 +242,36 @@ def main():
         print("本日検出された銘柄はありません。定期通知を送信します。")
         no_signal_message = "🚨 **【AIアナリスト：スクリーニング結果報告】**\n\n💤 本日、監視対象銘柄の中でスクリーニング条件を満たす銘柄はありませんでした。"
         try:
-            requests.post(DISCORD_WEBHOOK_URL, json={"content": no_signal_message})
+            requests.post(
+                DISCORD_WEBHOOK_URL, json={"content": no_signal_message}
+            )
         except Exception as e:
             print(f"Failed to send zero-match notification: {e}")
         return
 
-    print(f"{len(detected_stocks)} 件の銘柄を検出しました。レポートを作成します...")
+    print(
+        f"{len(detected_stocks)} 件の銘柄を検出しました。レポートを作成します..."
+    )
+
+    csv_results = []
 
     for i, stock in enumerate(detected_stocks, 1):
         report = generate_report(stock)
         send_discord_notification(i, stock, report)
+
+        # CSV保存用にデータを集計
+        csv_results.append({
+            "rank": i,
+            "code": stock["code"],
+            "name": stock["name"],
+            "pattern": stock["signal"],
+            "price": stock["close"],
+            "report": report,
+        })
+
+    # 分析結果を data/history.csv に自動追記保存
+    save_to_csv(csv_results)
+
 
 if __name__ == "__main__":
     main()
