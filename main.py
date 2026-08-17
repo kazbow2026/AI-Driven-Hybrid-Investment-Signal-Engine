@@ -129,8 +129,9 @@ def generate_report(stock_info):
 ※文字数は全体で250文字程度、箇条書きを活用して読みやすく作成してください。
 """
     try:
+        # 最新の推奨モデル gemini-3.6-flash を指定
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-3.6-flash",
             contents=prompt,
         )
         return response.text
