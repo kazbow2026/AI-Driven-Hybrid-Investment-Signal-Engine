@@ -1,31 +1,45 @@
-name: Daily Stock Screener & AI Analyst
+name: Daily Stock Analysis WorkFlow
 
 on:
+  # 平日（月〜金）の定期自動実行スケジュール (UTC 06:00 = JST 15:00)
   schedule:
-    # UTCの 09:00 (日本時間 JST 18:00) / 月〜金曜日
-    - cron: '0 9 * * 1-5'
-  workflow_dispatch: # 手動実行用ボタンを有効化
+    - cron: '0 6 * * 1-5'
+
+  # 手動実行ボタンの有効化と画面UIオプションの追加
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'テストモードで実行する (シグナル不検出時にダミーデータを使用)'
+        type: boolean
+        required: false
+        default: true  # 手動で実行する際のデフォルトを「ON」に設定
 
 jobs:
-  build-and-run:
+  run-screening:
     runs-on: ubuntu-latest
 
     steps:
-      - name: リポジトリのチェックアウト
+      # 1. リポジトリのコードをチェックアウト
+      - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Python環境のセットアップ
+      # 2. Python環境のセットアップ
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: 依存ライブラリのインストール
+      # 3. 必要な外部ライブラリのインストール
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install yfinance pandas requests google-genai
 
-      - name: スクリーニング・AI解析・Discord送信の実行
+      # 4. メインスクリプトの実行
+      - name: Run main script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # 手動実行時のチェック状態を環境変数 TEST_MODE ("true" または "false") として渡す
+          TEST_MODE: ${{ inputs.test_mode || 'false' }}
         run: python main.py
