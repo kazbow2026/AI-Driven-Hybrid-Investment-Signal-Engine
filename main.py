@@ -134,14 +134,14 @@ def main():
             detected_stocks.append(result)
 
     if not detected_stocks:
-        print("本日検出された銘柄はありません。")
+        print("本日検出された銘柄はありません。定期通知を送信します。")
+        no_signal_message = """
+🚨 **【AIアナリスト：スクリーニング結果報告】**
+
+💤 本日、監視対象銘柄の中でスクリーニング条件（新高値ブレイクアウト／攻めの押し目買い）を満たす銘柄はありませんでした。
+"""
+        try:
+            requests.post(DISCORD_WEBHOOK_URL, json={"content": no_signal_message})
+        except Exception as e:
+            print(f"Failed to send zero-match notification: {e}")
         return
-
-    print(f"{len(detected_stocks)} 件の銘柄を検出しました。レポートを作成します...")
-
-    for i, stock in enumerate(detected_stocks, 1):
-        report = generate_report(stock)
-        send_discord_notification(i, stock, report)
-
-if __name__ == "__main__":
-    main()
