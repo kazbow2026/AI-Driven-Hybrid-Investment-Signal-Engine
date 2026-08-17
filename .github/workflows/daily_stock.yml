@@ -18,6 +18,10 @@ jobs:
   run-screening:
     runs-on: ubuntu-latest
 
+    # リポジトリへの変更（CSVファイルの保存・コミット）を許可するための権限設定
+    permissions:
+      contents: write
+
     steps:
       # 1. リポジトリのコードをチェックアウト
       - name: Check out repository
@@ -33,7 +37,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install yfinance pandas requests google-genai
+          pip install yfinance pandas numpy requests
 
       # 4. メインスクリプトの実行
       - name: Run main script
@@ -42,4 +46,12 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           # 手動実行時のチェック状態を環境変数 TEST_MODE ("true" または "false") として渡す
           TEST_MODE: ${{ inputs.test_mode || 'false' }}
-        run: python main.py
+        run: python daily_analysis.py
+
+      # 5. CSV変更ログの自動コミット & プッシュ設定
+      - name: Commit and push saved CSV
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add data/history.csv
+          git diff --quiet && git diff --staged --quiet || (git commit -m "auto: update analysis history [skip ci]" && git push)
