@@ -5,15 +5,16 @@ import pandas as pd
 from google import genai
 
 # ==========================================
-# 1. 環境変数の取得と初期化
+# 1. 環境変数の取得とGemini Client初期化
 # ==========================================
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
+# google-genai SDK推奨のクライアント初期化
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ==========================================
-# 2. 監視銘柄リスト（152銘柄に拡張）
+# 2. 監視銘柄リスト（152銘柄）
 # ==========================================
 RAW_DATA = [
     "7203:トヨタ自動車,7201:日産自動車,7267:本田技研工業,7269:スズキ,6902:デンソー",
@@ -125,6 +126,7 @@ def generate_report(stock_info):
 ※文字数は全体で250文字程度、箇条書きを活用して読みやすく作成してください。
 """
     try:
+        # 正しいgoogle-genai SDKのメソッド呼び出しと安定モデル名の指定
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=prompt,
@@ -164,7 +166,7 @@ def main():
         if result:
             detected_stocks.append(result)
 
-    # 該当銘柄が0件の場合でもDiscordへ通知を送信
+    # シグナル検出が0件だった場合の定期レポート処理
     if not detected_stocks:
         print("本日検出された銘柄はありません。定期通知を送信します。")
         no_signal_message = "🚨 **【AIアナリスト：スクリーニング結果報告】**\n\n💤 本日、監視対象銘柄の中でスクリーニング条件（新高値ブレイクアウト／攻めの押し目買い）を満たす銘柄はありませんでした。"
