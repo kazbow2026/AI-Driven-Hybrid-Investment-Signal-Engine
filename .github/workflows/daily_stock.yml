@@ -49,10 +49,15 @@ jobs:
           TEST_MODE: ${{ inputs.test_mode || 'false' }}
         run: python main.py
 
-      # 5. CSV変更ログの自動コミット & プッシュ設定
+      # 5. CSV変更ログの自動コミット & プッシュ設定（ファイルが存在する場合のみ実行）
       - name: Commit and push saved CSV
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add data/history.csv
-          git diff --quiet && git diff --staged --quiet || (git commit -m "auto: update analysis history [skip ci]" && git push)
+          
+          if [ -f "data/history.csv" ]; then
+            git add data/history.csv
+            git diff --quiet && git diff --staged --quiet || (git commit -m "auto: update analysis history [skip ci]" && git push)
+          else
+            echo "data/history.csv does not exist yet. Skipping commit."
+          fi
