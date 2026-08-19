@@ -30,14 +30,28 @@ def send_discord_notification(webhook_url, content=None, embeds=None):
 
 def evaluate_performance():
     history_path = "data/history.csv"
-    if not os.path.exists(history_path):
-        print("⚠️ 蓄積された履歴データ (`data/history.csv`) が存在しません。")
+    
+    # 1. ファイルが存在するか、または空（サイズが0バイト）でないかチェック
+    if not os.path.exists(history_path) or os.path.getsize(history_path) == 0:
+        print("⚠️ 蓄積された履歴データ (`data/history.csv`) が存在しないか、空です。評価をスキップします。")
         return
 
-    # 履歴データの読み込み
-    df_history = pd.read_csv(history_path, dtype={"code": str})
+    try:
+        # 履歴データの読み込み
+        df_history = pd.read_csv(history_path, dtype={"code": str})
+    except Exception as e:
+        print(f"⚠️ 履歴データの読み込みに失敗しました: {e}")
+        return
+
     if df_history.empty:
-        print("⚠️ 履歴データが空です。")
+        print("⚠️ 履歴データが空です。評価をスキップします。")
+        return
+
+    # 2. 必須カラムがすべて揃っているかチェック（KeyError防止）
+    required_columns = ["code", "date", "price", "pattern", "name"]
+    missing_columns = [col for col in required_columns if col not in df_history.columns]
+    if missing_columns:
+        print(f"⚠️ 履歴データに必要なカラムが不足しています (不足: {missing_columns})。評価をスキップします。")
         return
 
     evaluated_records = []
