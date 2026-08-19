@@ -46,7 +46,7 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           # 手動実行時のチェック状態を環境変数 TEST_MODE ("true" または "false") として渡す
           TEST_MODE: ${{ inputs.test_mode || 'false' }}
-        run: python daily_analysis.py
+        run: python main.py
 
       # 5. CSV変更ログの自動コミット & プッシュ設定
       - name: Commit and push saved CSV
