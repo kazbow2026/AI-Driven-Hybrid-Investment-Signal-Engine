@@ -183,7 +183,7 @@ def generate_report(stock_info):
 ※文字数は全体で250文字程度、箇条書きを活用して読みやすく作成してください。
 """
     try:
-        # 最新の推奨モデル gemini-3.6-flash を指定
+        # モデルは gemini-3.6-flash に統一
         response = client.models.generate_content(
             model="gemini-3.6-flash",
             contents=prompt,
@@ -217,10 +217,17 @@ def send_discord_notification(rank, stock_info, report_text):
 # 6. メイン実行処理
 # ==========================================
 def main():
-    print(f"全 {len(TARGET_STOCKS)} 銘柄のスクリーニングを開始します...")
+    target_dict = TARGET_STOCKS
+
+    # テストモード有効時は処理負荷軽減のため先頭5銘柄に制限
+    if TEST_MODE:
+        print("【TEST MODE】テストモードが有効です。処理銘柄数を制限します。")
+        target_dict = dict(list(TARGET_STOCKS.items()[:5]))
+
+    print(f"全 {len(target_dict)} 銘柄のスクリーニングを開始します...")
     detected_stocks = []
 
-    for ticker, name in TARGET_STOCKS.items():
+    for ticker, name in target_dict.items():
         result = analyze_stock(ticker, name)
         if result:
             detected_stocks.append(result)
@@ -259,7 +266,7 @@ def main():
         report = generate_report(stock)
         send_discord_notification(i, stock, report)
 
-        # CSV保存用にデータを集計
+        # CSV保存用にデータを集計（指定のキー・順序に準拠）
         csv_results.append({
             "rank": i,
             "code": stock["code"],
