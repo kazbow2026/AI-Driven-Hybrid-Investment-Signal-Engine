@@ -4,6 +4,8 @@ on:
   # 平日（月〜金）の定期自動実行スケジュール (UTC 06:00 = JST 15:00)
   schedule:
     - cron: '0 6 * * 1-5'
+    # 毎週金曜日のパフォーマンス評価用スケジュール (UTC 06:30 = JST 15:30)
+    - cron: '30 6 * * 5'
 
   # 手動実行ボタンの有効化と画面UIオプションの追加
   workflow_dispatch:
@@ -49,15 +51,39 @@ jobs:
           TEST_MODE: ${{ inputs.test_mode || 'false' }}
         run: python main.py
 
-      # 5. CSV変更ログの自動コミット & プッシュ設定（ファイルが存在する場合のみ実行）
-      - name: Commit and push saved CSV
+      # 4.5. フィードバック評価プログラムの実行（金曜日または手動実行時）
+      - name: Run performance feedback script
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          # 毎週金曜日のスケジュール実行、もしくは手動実行時に feedback.py を稼働させる
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$(date +%u)" = "5" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Running feedback.py..."
+            python feedback.py
+          else
+            echo "Skipping feedback.py (not scheduled feedback time)."
+          fi
+
+      # 5. CSV変更ログの自動コミット & プッシュ設定（history.csv と performance_log.csv を対象）
+      - name: Commit and push saved CSVs
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
+          CHANGES_DETECTED=false
+          
           if [ -f "data/history.csv" ]; then
             git add data/history.csv
-            git diff --quiet && git diff --staged --quiet || (git commit -m "auto: update analysis history [skip ci]" && git push)
+            CHANGES_DETECTED=true
+          fi
+          
+          if [ -f "data/performance_log.csv" ]; then
+            git add data/performance_log.csv
+            CHANGES_DETECTED=true
+          fi
+          
+          if [ "$CHANGES_DETECTED" = true ]; then
+            git diff --quiet && git diff --staged --quiet || (git commit -m "auto: update analysis history and performance log [skip ci]" && git push)
           else
-            echo "data/history.csv does not exist yet. Skipping commit."
+            echo "No CSV files found to commit."
           fi
